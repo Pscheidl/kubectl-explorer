@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+  annotations:
+    overseer-notify: '<deployments/test|/api/configchange>,<deployments/test|/api/configchange>'
+    test: abcd
+
+data:
+  numberValue: "1234567"
