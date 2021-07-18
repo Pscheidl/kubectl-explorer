@@ -287,4 +287,125 @@ mod test {
             .await
             .expect("ConfigMap not deleted.");
     }
+
+    #[tokio::test]
+    async fn cfgmap_secret_not_referenced_no_envfrom() {
+        let config = Config::infer()
+            .await
+            .expect("KUBECONFIG env var not set or invalid path/content.");
+        let client = Client::try_from(config.clone()).expect("Kubernetes cluster unreachable.");
+
+        // Create configmap in Kubernetes cluster
+        let mut config_data: BTreeMap<String, String> = BTreeMap::new();
+        config_data.insert("test_key".to_owned(), "test_value".to_owned());
+        let cfgmap = ConfigMap {
+            metadata: ObjectMeta {
+                name: Some("configmap-not-linked-no-envfrom".to_string()),
+                ..ObjectMeta::default()
+            },
+            data: config_data.clone(),
+            ..ConfigMap::default()
+        };
+
+        let cfgmap_api = Api::<ConfigMap>::namespaced(client.clone(), &config.default_namespace);
+        cfgmap_api
+            .create(&PostParams::default(), &cfgmap)
+            .await
+            .expect("Configmap not created.");
+
+        // Create secretg in the Kubernetes cluster
+        let mut secret_data: BTreeMap<String, ByteString> = BTreeMap::new(); // Used both for cfgmap and secret
+        secret_data.insert(
+            "test_key".to_owned(),
+            ByteString(base64::encode("test_value").into_bytes()),
+        );
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some("secret-not-linked-no-envfrom".to_string()),
+                ..ObjectMeta::default()
+            },
+            data: secret_data.clone(),
+            ..Secret::default()
+        };
+        let secret_api = Api::<Secret>::namespaced(client.clone(), &config.default_namespace);
+        secret_api
+            .create(&PostParams::default(), &secret)
+            .await
+            .expect("Secret not created.");
+
+        // Create a deployment linking to both `ConfigMap` and the `Secret`
+        let deployment_w_pod_spec = Deployment {
+            metadata: ObjectMeta {
+                name: Some("deployment-no-envfrom".to_string()),
+                ..ObjectMeta::default()
+            },
+            spec: Some(DeploymentSpec {
+                template: PodTemplateSpec {
+                    metadata: Some(ObjectMeta {
+                        labels: BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                            "app".to_string(),
+                            "deployment".to_string(),
+                        )])),
+                        ..ObjectMeta::default()
+                    }),
+                    spec: Some(PodSpec {
+                        containers: vec![Container {
+                            name: "nginx".to_string(),
+                            image: Some("alpine:latest".to_string()),
+                            command: vec!["sleep".to_string()],
+                            args: vec!["infinity".to_string()],
+                            ..Container::default()
+                        }],
+                        ..PodSpec::default()
+                    }),
+                    ..PodTemplateSpec::default()
+                },
+                selector: LabelSelector {
+                    match_labels: BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                        "app".to_string(),
+                        "deployment".to_string(),
+                    )])),
+                    ..LabelSelector::default()
+                },
+                ..DeploymentSpec::default()
+            }),
+            ..Deployment::default()
+        };
+
+        let dep_api = Api::<Deployment>::namespaced(client.clone(), &config.default_namespace);
+        dep_api
+            .create(&PostParams::default(), &deployment_w_pod_spec)
+            .await
+            .expect("Deployment resources not created in Kubernetes cluster.");
+
+        let cfgmap_name = cfgmap.name();
+        let secret_name = secret.name();
+        let cfgmaps_names = HashSet::<&str>::from_iter(IntoIter::new([cfgmap_name.as_str()]));
+        let secrets_names = HashSet::<&str>::from_iter(IntoIter::new([secret_name.as_str()]));
+        // Both the ConfigMap and the Secret should not be detected as orphans.
+        let orphans = find_orphans(
+            &secrets_names,
+            &cfgmaps_names,
+            &client,
+            &config.default_namespace,
+        )
+        .await;
+
+        assert!(orphans.cfgmaps.contains(cfgmap_name.as_str()));
+        assert!(orphans.secrets.contains(secret_name.as_str()));
+
+        // Free resources after the test
+        dep_api
+            .delete(&deployment_w_pod_spec.name(), &DeleteParams::default())
+            .await
+            .expect("Deployment not deleted.");
+        secret_api
+            .delete(&secret_name, &DeleteParams::default())
+            .await
+            .expect("Secret not deleted.");
+        cfgmap_api
+            .delete(&cfgmap_name, &DeleteParams::default())
+            .await
+            .expect("ConfigMap not deleted.");
+    }
 }
