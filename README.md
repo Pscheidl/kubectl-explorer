@@ -1,6 +1,7 @@
 # KubExplorer
+[![Rust build & tests](https://github.com/Pscheidl/kubexplorer/actions/workflows/rust.yml/badge.svg)](https://github.com/Pscheidl/kubexplorer/actions/workflows/rust.yml)
 
-**Warning** Proof of concept - no tests, no validations, no error handling.
+**Warning:** Proof of concept. Feedback is much welcome.
 
 Discovers and prints out any `Configmaps` and `Secrets` not linked to any of the following resources:
 1. Deployments,
