@@ -4,21 +4,45 @@ use std::convert::TryFrom;
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
 use kube::{Client, Config};
 
+use crate::input::{parse_user_input, UserArgs};
 use crate::orphans::find_orphans;
 use crate::resources::list_resource;
+use kube::config::{KubeConfigOptions, Kubeconfig};
 
+mod input;
 mod orphans;
 mod pod_spec;
 mod resources;
 
 #[tokio::main]
 async fn main() {
-    let config = Config::infer()
+    let user_args: UserArgs = parse_user_input();
+
+    let config = match user_args.kubeconfig {
+        None => Config::infer()
+            .await
+            .expect("Expected a valid KUBECONFIG environment variable"),
+        Some(kubeconfig_path) => Config::from_custom_kubeconfig(
+            Kubeconfig::read_from(kubeconfig_path)
+                .expect("User-provided KUBECONFIG path is invalid."),
+            &KubeConfigOptions::default(),
+        )
         .await
-        .expect("Expected a valid KUBECONFIG environment variable");
+        .expect("Invalid KUBECONFIG"),
+    };
+    let namespace = match user_args.namespace {
+        None => config.default_namespace.clone(),
+        Some(ns) => ns,
+    };
+
+    println!(
+        "Searching for unused ConfigMaps and Secrets in the '{}' namespace",
+        &namespace
+    );
+
     let client: Client = Client::try_from(config.clone()).unwrap();
-    let configmaps_fut = list_resource::<ConfigMap>(&client, &config.default_namespace);
-    let secrets_fut = list_resource::<Secret>(&client, &config.default_namespace);
+    let configmaps_fut = list_resource::<ConfigMap>(&client, &namespace);
+    let secrets_fut = list_resource::<Secret>(&client, &namespace);
     let (cfgmaps_res, secrets_res) = tokio::join!(configmaps_fut, secrets_fut);
 
     // Todo: Can be generalized as both resources implement the `Metadata` trait
@@ -34,13 +58,7 @@ async fn main() {
         .map(|r| r.metadata.name.as_ref().unwrap().as_str())
         .collect();
 
-    let orphans = find_orphans(
-        &secrets_names,
-        &cfgmap_names,
-        &client,
-        &config.default_namespace,
-    )
-    .await;
+    let orphans = find_orphans(&secrets_names, &cfgmap_names, &client, &namespace).await;
 
     println!("Orphan configmaps:");
     orphans.cfgmaps.iter().for_each(|res| {

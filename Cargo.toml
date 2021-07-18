@@ -12,6 +12,7 @@ futures = "0.3"
 regex = "1"
 thiserror = "1.0"
 rayon = "1.5"
+clap = "2.33"
 
 [dev-dependencies]
 base64 = "0.13"
