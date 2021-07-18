@@ -112,11 +112,8 @@ pub fn extend_with<'a, T: ResourceWithPodSpec>(
 ) where
     T: ResourceWithPodSpec,
 {
-    let mut ext_pod_specs: Vec<&'a PodSpec> = extensions
-        .iter()
-        .filter_map(|e| e.pod_template_spec())
-        .collect();
-    pod_specs.append(&mut ext_pod_specs);
+    let ext_pod_specs = extensions.iter().filter_map(|e| e.pod_template_spec());
+    pod_specs.extend(ext_pod_specs);
 }
 
 pub struct Orphans<'a> {
