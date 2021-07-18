@@ -63,3 +63,53 @@ impl ResourceWithPodSpec for Pod {
         self.spec.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
+    use k8s_openapi::api::core::v1::{Container, PodSpec, PodTemplateSpec};
+    use kube::api::ObjectMeta;
+
+    use crate::pod_spec::ResourceWithPodSpec;
+
+    #[tokio::test]
+    async fn deployment_pod_spec() {
+        let deployment_w_pod_spec = Deployment {
+            metadata: ObjectMeta {
+                name: Some("deployment_pod_spec".to_string()),
+                ..ObjectMeta::default()
+            },
+            spec: Some(DeploymentSpec {
+                template: PodTemplateSpec {
+                    spec: Some(PodSpec {
+                        containers: vec![Container {
+                            name: "nginx".to_string(),
+                            image: Some("alpine:latest".to_string()),
+                            command: vec!["sleep".to_string()],
+                            args: vec!["infinity".to_string()],
+                            ..Container::default()
+                        }],
+                        ..PodSpec::default()
+                    }),
+                    ..PodTemplateSpec::default()
+                },
+                ..DeploymentSpec::default()
+            }),
+            ..Deployment::default()
+        };
+
+        let pod_spec_option: Option<&PodSpec> = deployment_w_pod_spec.pod_template_spec();
+        assert!(pod_spec_option.is_some());
+        assert_eq!(
+            pod_spec_option.unwrap(),
+            deployment_w_pod_spec
+                .spec
+                .as_ref()
+                .unwrap()
+                .template
+                .spec
+                .as_ref()
+                .unwrap()
+        );
+    }
+}

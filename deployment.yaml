@@ -16,7 +16,11 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: nginx:1.14.2
+          image: alpine:latest
+          command:
+            - sleep
+          args:
+            - infinity
           ports:
             - containerPort: 80
           envFrom:

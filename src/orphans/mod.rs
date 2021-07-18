@@ -12,8 +12,8 @@ use crate::pod_spec::ResourceWithPodSpec;
 use crate::resources::list_resource;
 
 pub async fn find_orphans<'a>(
-    secrets: HashSet<&'a str>,
-    cfgmaps: HashSet<&'a str>,
+    secrets: &HashSet<&'a str>,
+    cfgmaps: &HashSet<&'a str>,
     client: &Client,
     namespace: &str,
 ) -> Orphans<'a> {

@@ -536,6 +536,7 @@ dependencies = [
 name = "kubex"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "futures",
  "k8s-openapi",
  "kube",
