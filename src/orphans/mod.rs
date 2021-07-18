@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, ReplicaSet, StatefulSet};
 use k8s_openapi::api::batch::v1::Job;
@@ -71,8 +71,8 @@ pub async fn find_orphans<'a>(
     let pods = pods_res.unwrap();
     extend_with(&mut pod_specs, &pods);
 
-    let locked_secret_orphans = RwLock::new(&mut secrets_orphans);
-    let locked_configmap_orphans = RwLock::new(&mut cfgmaps_orphans);
+    let locked_secret_orphans = Mutex::new(&mut secrets_orphans);
+    let locked_configmap_orphans = Mutex::new(&mut cfgmaps_orphans);
     pod_specs.par_iter().for_each(|pod_spec| {
         pod_spec
             .containers
@@ -80,25 +80,25 @@ pub async fn find_orphans<'a>(
             .flat_map(|container| &container.env_from)
             .for_each(|env_from| {
                 if let Some(cfgmap) = env_from.config_map_ref.as_ref() {
-                    let mut lock = locked_configmap_orphans.write().unwrap();
-                    lock.remove(cfgmap.name.as_ref().unwrap().as_str());
+                    let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
+                    locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap().as_str());
                 }
 
                 if let Some(secret) = env_from.secret_ref.as_ref() {
-                    let mut lock = locked_secret_orphans.write().unwrap();
-                    lock.remove(secret.name.as_ref().unwrap().as_str());
+                    let mut locked_secrets = locked_secret_orphans.lock().unwrap();
+                    locked_secrets.remove(secret.name.as_ref().unwrap().as_str());
                 }
             });
 
         pod_spec.volumes.iter().for_each(|volume| {
             if let Some(cfgmap) = volume.config_map.as_ref() {
-                let mut lock = locked_configmap_orphans.write().unwrap();
-                lock.remove(cfgmap.name.as_ref().unwrap().as_str());
+                let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
+                locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap().as_str());
             }
 
             if let Some(secret) = volume.secret.as_ref() {
-                let mut lock = locked_secret_orphans.write().unwrap();
-                lock.remove(secret.secret_name.as_ref().unwrap().as_str());
+                let mut lock_secrets = locked_secret_orphans.lock().unwrap();
+                lock_secrets.remove(secret.secret_name.as_ref().unwrap().as_str());
             }
         });
     });
