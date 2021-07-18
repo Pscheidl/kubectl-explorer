@@ -10,14 +10,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-20.04
-
     steps:
       - uses: debianmaster/actions-k3s@master
-          id: k3s
-          with:
-            version: 'latest'
+        id: k3s
+        with:
+          version: 'latest'
       - uses: actions/checkout@v2
       - name: Build
         run: cargo build --verbose
