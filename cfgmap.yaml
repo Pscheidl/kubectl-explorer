@@ -3,7 +3,6 @@ kind: ConfigMap
 metadata:
   name: test
   annotations:
-    overseer-notify: '<deployments/test|/api/configchange>,<deployments/test|/api/configchange>'
     test: abcd
 
 data:

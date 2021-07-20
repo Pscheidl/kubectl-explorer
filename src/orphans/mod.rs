@@ -7,6 +7,7 @@ use k8s_openapi::api::batch::v1beta1::CronJob;
 use k8s_openapi::api::core::v1::{Pod, PodSpec, ReplicationController};
 use kube::Client;
 use rayon::prelude::*;
+use serde::Serialize;
 
 use crate::pod_spec::ResourceWithPodSpec;
 use crate::resources::list_resource;
@@ -116,13 +117,17 @@ pub fn extend_with<'a, T: ResourceWithPodSpec>(
     pod_specs.extend(ext_pod_specs);
 }
 
+#[derive(Serialize)]
 pub struct Orphans<'a> {
+    pub configmaps: HashSet<&'a str>,
     pub secrets: HashSet<&'a str>,
-    pub cfgmaps: HashSet<&'a str>,
 }
 
 impl<'a> Orphans<'a> {
     pub fn new(secrets: HashSet<&'a str>, cfgmaps: HashSet<&'a str>) -> Self {
-        Orphans { secrets, cfgmaps }
+        Orphans {
+            secrets,
+            configmaps: cfgmaps,
+        }
     }
 }

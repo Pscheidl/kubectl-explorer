@@ -14,6 +14,7 @@ Discovers and prints out any `Configmaps` and `Secrets` not linked to any of the
 1. Pods.
 
 ## Running
+There are no pre-compiled binaries yet, but running this tool is easy.
 
 1. [Install Rust](https://www.rust-lang.org/learn/get-started)
 1. Simply invoke `cargo run -- -h` (add the `--release` flag for optimal performance) to obtain instructions.
@@ -35,13 +36,13 @@ FLAGS:
 OPTIONS:
     -k, --kubeconfig <PATH_TO_KUBECONFIG>    Path to a KUBECONFIG file. When not set, env is used.
     -n, --namespace <NAMESPACE>              Namespace to search in.
+    -o, --output <OUTPUT>                    Output format. YAML by default. [default: yaml]  [possible values: yaml,
+                                             json]
 ```
 
-E.g. `cargo run -- -k /etc/rancher/k3s/k3s.yaml -n default` to explicitly specify the `KUBECONFIG` and the namespace.
+E.g. `cargo run --release -- -k /etc/rancher/k3s/k3s.yaml -n default -o json` to explicitly specify the `KUBECONFIG` and the namespace.
 If `KUBECONFIG` is not specified, the `KUBECONFIG` env variable is looked for. When not found, an error is thrown.
 If `namespace` is not defined, the default namespace from `KUBECONFIG` is used.
-
-The tool will detect orphans in the `KUBECONFIG`'s default namespace.
 
 ## Testing
 

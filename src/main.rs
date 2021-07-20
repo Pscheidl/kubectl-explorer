@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
 use kube::{Client, Config};
 
-use crate::input::{parse_user_input, UserArgs};
+use crate::input::{parse_user_input, Output, UserArgs};
 use crate::orphans::find_orphans;
 use crate::resources::list_resource;
 use kube::config::{KubeConfigOptions, Kubeconfig};
@@ -60,15 +60,14 @@ async fn main() {
 
     let orphans = find_orphans(&secrets_names, &cfgmap_names, &client, &namespace).await;
 
-    println!("Orphan configmaps:");
-    orphans.cfgmaps.iter().for_each(|res| {
-        println!("{}", res);
-    });
-
-    println!("Orphan secrets:");
-    orphans.secrets.iter().for_each(|res| {
-        println!("{}", res);
-    });
+    match user_args.output {
+        Output::YAML => {
+            println!("{}", serde_yaml::to_string(&orphans).unwrap());
+        }
+        Output::JSON => {
+            println!("{}", serde_json::to_string_pretty(&orphans).unwrap());
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -216,7 +215,7 @@ mod test {
         )
         .await;
 
-        assert!(!orphans.cfgmaps.contains(cfgmap_name.as_str()));
+        assert!(!orphans.configmaps.contains(cfgmap_name.as_str()));
         assert!(!orphans.secrets.contains(secret_name.as_str()));
 
         // Free resources after the test
@@ -292,7 +291,7 @@ mod test {
         )
         .await;
 
-        assert!(orphans.cfgmaps.contains(cfgmap_name.as_str()));
+        assert!(orphans.configmaps.contains(cfgmap_name.as_str()));
         assert!(orphans.secrets.contains(secret_name.as_str()));
 
         // Free resources after the test
@@ -409,7 +408,7 @@ mod test {
         )
         .await;
 
-        assert!(orphans.cfgmaps.contains(cfgmap_name.as_str()));
+        assert!(orphans.configmaps.contains(cfgmap_name.as_str()));
         assert!(orphans.secrets.contains(secret_name.as_str()));
 
         // Free resources after the test

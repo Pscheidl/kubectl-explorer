@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use std::str::FromStr;
 
 pub fn parse_user_input() -> UserArgs {
     let matches = App::new("KubEx - Kubernetes Explorer")
@@ -21,28 +22,60 @@ pub fn parse_user_input() -> UserArgs {
                 .help("Namespace to search in.")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("OUTPUT")
+                .short("o")
+                .long("output")
+                .value_name("OUTPUT")
+                .help("Output format. YAML by default.")
+                .possible_values(&["yaml", "json"])
+                .default_value("yaml")
+                .takes_value(true),
+        )
         .get_matches();
 
     UserArgs::new(
         matches
             .value_of("KUBECONFIG")
-            .map_or(None, |f| Some(f.to_string())),
+            .map_or(None, |arg| Some(arg.to_string())),
         matches
             .value_of("NAMESPACE")
-            .map_or(None, |f| Some(f.to_string())),
+            .map_or(None, |arg| Some(arg.to_string())),
+        matches.value_of("OUTPUT").map_or(Output::YAML, |arg| {
+            Output::from_str(arg).unwrap_or(Output::YAML)
+        }),
     )
 }
 
 pub struct UserArgs {
     pub kubeconfig: Option<String>,
     pub namespace: Option<String>,
+    pub output: Output,
 }
 
 impl UserArgs {
-    pub fn new(kubeconfig: Option<String>, namespace: Option<String>) -> Self {
+    pub fn new(kubeconfig: Option<String>, namespace: Option<String>, output: Output) -> Self {
         UserArgs {
             kubeconfig,
             namespace,
+            output,
         }
+    }
+}
+
+pub enum Output {
+    YAML,
+    JSON,
+}
+
+impl FromStr for Output {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        return match s.trim().to_lowercase().as_str() {
+            "yaml" => Ok(Output::YAML),
+            "json" => Ok(Output::JSON),
+            _ => Err("Invalid output format".to_string()),
+        };
     }
 }
