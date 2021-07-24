@@ -1,0 +1,36 @@
+name: Latest build
+
+on:
+  push:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET_LINUX: x86_64-unknown-linux-gnu
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: debianmaster/actions-k3s@master
+        id: k3s
+        with:
+          version: 'latest'
+      - uses: actions/checkout@v2
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Release build
+        run: rustup target add ${{ env.TARGET_LINUX }}
+      - name: Release artifacts
+        run: cargo build --release --target ${{ env.TARGET_LINUX }}
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Latest Development Build"
+          files: |
+            LICENSE
+            target/${{ env.TARGET_LINUX }}/release/kubex

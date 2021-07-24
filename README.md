@@ -14,7 +14,7 @@ Discovers and prints out any `Configmaps` and `Secrets` not linked to any of the
 1. Pods.
 
 ## Running
-There are no pre-compiled binaries yet, but running this tool is easy.
+Pre-compiled `x86_64-unknown-linux-gnu` binaries are available. For other platforms, compilation is an easy, but necessary step.
 
 1. [Install Rust](https://www.rust-lang.org/learn/get-started)
 1. Simply invoke `cargo run -- -h` (add the `--release` flag for optimal performance) to obtain instructions.
