@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::pod_spec::ResourceWithPodSpec;
 use crate::resources::list_resource;
+use k8s_openapi::api::networking::v1::Ingress;
 
 pub async fn find_orphans<'a>(
     secrets: &HashSet<&'a str>,
@@ -31,6 +32,7 @@ pub async fn find_orphans<'a>(
     let cronjobs_fut = list_resource::<CronJob>(client, namespace);
     let replication_controllers_fut = list_resource::<ReplicationController>(client, namespace);
     let pods_fut = list_resource::<Pod>(client, namespace);
+    let ingresses_fut = list_resource::<Ingress>(client, namespace);
 
     // Kubernetes API Denial Of Service attack :)
     let (
@@ -42,6 +44,7 @@ pub async fn find_orphans<'a>(
         cronjobs_res,
         replication_controllers_res,
         pods_res,
+        ingresses,
     ) = tokio::join!(
         deployments_fut,
         replicasets_fut,
@@ -50,7 +53,8 @@ pub async fn find_orphans<'a>(
         jobs_fut,
         cronjobs_fut,
         replication_controllers_fut,
-        pods_fut
+        pods_fut,
+        ingresses_fut
     );
 
     let mut pod_specs: Vec<&PodSpec> = Vec::new();
@@ -103,6 +107,15 @@ pub async fn find_orphans<'a>(
             }
         });
     });
+
+    ingresses
+        .unwrap()
+        .iter()
+        .flat_map(|ingress| &ingress.spec.as_ref().unwrap().tls)
+        .filter_map(|tls| tls.secret_name.as_ref())
+        .for_each(|secret| {
+            secrets_orphans.remove(secret.as_str());
+        });
 
     Orphans::new(secrets_orphans, cfgmaps_orphans)
 }
