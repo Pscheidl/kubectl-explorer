@@ -11,7 +11,8 @@ Discovers and prints out any `Configmaps` and `Secrets` not linked to any of the
 1. Jobs,
 1. CronJobs,
 1. ReplicationControllers,
-1. Pods.
+1. Pods,
+1. Ingresses.
 
 ## Running
 Pre-compiled `x86_64-unknown-linux-gnu` binaries are available. For other platforms, compilation is an easy, but necessary step.
