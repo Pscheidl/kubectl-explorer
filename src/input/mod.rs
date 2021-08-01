@@ -35,14 +35,10 @@ pub fn parse_user_input() -> UserArgs {
         .get_matches();
 
     UserArgs::new(
-        matches
-            .value_of("KUBECONFIG")
-            .map_or(None, |arg| Some(arg.to_string())),
-        matches
-            .value_of("NAMESPACE")
-            .map_or(None, |arg| Some(arg.to_string())),
-        matches.value_of("OUTPUT").map_or(Output::YAML, |arg| {
-            Output::from_str(arg).unwrap_or(Output::YAML)
+        matches.value_of("NAMESPACE").map(|arg| arg.to_string()),
+        matches.value_of("NAMESPACE").map(|arg| arg.to_string()),
+        matches.value_of("OUTPUT").map_or(Output::Yaml, |arg| {
+            Output::from_str(arg).unwrap_or(Output::Yaml)
         }),
     )
 }
@@ -64,8 +60,8 @@ impl UserArgs {
 }
 
 pub enum Output {
-    YAML,
-    JSON,
+    Yaml,
+    Json,
 }
 
 impl FromStr for Output {
@@ -73,8 +69,8 @@ impl FromStr for Output {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         return match s.trim().to_lowercase().as_str() {
-            "yaml" => Ok(Output::YAML),
-            "json" => Ok(Output::JSON),
+            "yaml" => Ok(Output::Yaml),
+            "json" => Ok(Output::Json),
             _ => Err("Invalid output format".to_string()),
         };
     }
