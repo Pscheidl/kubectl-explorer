@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+use anyhow::Result;
 use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, ReplicaSet, StatefulSet};
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::batch::v1beta1::CronJob;
@@ -13,18 +14,18 @@ use crate::pod_spec::ResourceWithPodSpec;
 use crate::resources::list_resource;
 use k8s_openapi::api::networking::v1::Ingress;
 
-pub async fn find_orphans(client: &Client, namespace: &str) -> Orphans {
+pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
     let configmaps_fut = list_resource::<ConfigMap>(client, namespace);
     let secrets_fut = list_resource::<Secret>(client, namespace);
-    let (cfgmaps_res, secrets_res) = tokio::join!(configmaps_fut, secrets_fut);
+    let (cfgmaps, secrets) = tokio::try_join!(configmaps_fut, secrets_fut)?;
 
-    let cfgmaps = cfgmaps_res.unwrap();
+    // Move names of configmaps and secrets into HashSets. Later, remove any configmap's or secret's
+    // name that's being referenced to. The resulting HashSet only contains unreferenced elements.
     let mut cfgmaps_orphans: HashSet<String> = cfgmaps
         .into_iter()
         .filter_map(|r| r.metadata.name)
         .collect();
 
-    let secrets = secrets_res.unwrap();
     let mut secrets_orphans: HashSet<String> = secrets
         .into_iter()
         .filter_map(|r| r.metadata.name)
@@ -44,16 +45,16 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Orphans {
 
     // Kubernetes API Denial Of Service attack :)
     let (
-        deployments_res,
-        replicasets_res,
-        statefulsets_res,
-        daemonsets_res,
-        jobs_res,
-        cronjobs_res,
-        replication_controllers_res,
-        pods_res,
+        deployments,
+        replicasets,
+        statefulsets,
+        daemonsets,
+        jobs,
+        cronjobs,
+        replication_controllers,
+        pods,
         ingresses,
-    ) = tokio::join!(
+    ) = tokio::try_join!(
         deployments_fut,
         replicasets_fut,
         statefulsets_fut,
@@ -63,61 +64,26 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Orphans {
         replication_controllers_fut,
         pods_fut,
         ingresses_fut
-    );
+    )?;
 
     let mut pod_specs: Vec<&PodSpec> = Vec::new();
 
-    let deployments = deployments_res.unwrap();
     extend_with(&mut pod_specs, &deployments);
-    let replicasets = replicasets_res.unwrap();
     extend_with(&mut pod_specs, &replicasets);
-    let statefulsets = statefulsets_res.unwrap();
     extend_with(&mut pod_specs, &statefulsets);
-    let daemonsets = daemonsets_res.unwrap();
     extend_with(&mut pod_specs, &daemonsets);
-    let jobs = jobs_res.unwrap();
     extend_with(&mut pod_specs, &jobs);
-    let cronjobs = cronjobs_res.unwrap();
     extend_with(&mut pod_specs, &cronjobs);
-    let replication_controllers = replication_controllers_res.unwrap();
     extend_with(&mut pod_specs, &replication_controllers);
-    let pods = pods_res.unwrap();
     extend_with(&mut pod_specs, &pods);
 
-    let locked_secret_orphans = Mutex::new(&mut secrets_orphans);
-    let locked_configmap_orphans = Mutex::new(&mut cfgmaps_orphans);
+    let locked_secret_orphans: Mutex<&mut HashSet<String>> = Mutex::new(&mut secrets_orphans);
+    let locked_configmap_orphans: Mutex<&mut HashSet<String>> = Mutex::new(&mut cfgmaps_orphans);
     pod_specs.par_iter().for_each(|pod_spec| {
-        pod_spec
-            .containers
-            .iter()
-            .flat_map(|container| &container.env_from)
-            .for_each(|env_from| {
-                if let Some(cfgmap) = env_from.config_map_ref.as_ref() {
-                    let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                    locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
-                }
-
-                if let Some(secret) = env_from.secret_ref.as_ref() {
-                    let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                    locked_secrets.remove(secret.name.as_ref().unwrap());
-                }
-            });
-
-        pod_spec.volumes.iter().for_each(|volume| {
-            if let Some(cfgmap) = volume.config_map.as_ref() {
-                let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
-                locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
-            }
-
-            if let Some(secret) = volume.secret.as_ref() {
-                let mut lock_secrets = locked_secret_orphans.lock().unwrap();
-                lock_secrets.remove(secret.secret_name.as_ref().unwrap());
-            }
-        });
+        find_references_in_podspec(pod_spec, &locked_secret_orphans, &locked_configmap_orphans)
     });
 
     ingresses
-        .unwrap()
         .iter()
         .flat_map(|ingress| &ingress.spec.as_ref().unwrap().tls)
         .filter_map(|tls| tls.secret_name.as_ref())
@@ -125,7 +91,43 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Orphans {
             secrets_orphans.remove(secret.as_str());
         });
 
-    Orphans::new(cfgmaps_orphans, secrets_orphans)
+    Ok(Orphans::new(cfgmaps_orphans, secrets_orphans))
+}
+
+/// Inspects given `pod_spec` for references on `ConfigMap`s and `Secret`s.
+/// If any reference is found, it is removed from the list of existing configmaps or secrets respectively.
+fn find_references_in_podspec(
+    pod_spec: &PodSpec,
+    locked_secret_orphans: &Mutex<&mut HashSet<String>>,
+    locked_configmap_orphans: &Mutex<&mut HashSet<String>>,
+) {
+    pod_spec
+        .containers
+        .iter()
+        .flat_map(|container| &container.env_from)
+        .for_each(|env_from| {
+            if let Some(cfgmap) = env_from.config_map_ref.as_ref() {
+                let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
+                locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
+            }
+
+            if let Some(secret) = env_from.secret_ref.as_ref() {
+                let mut locked_secrets = locked_secret_orphans.lock().unwrap();
+                locked_secrets.remove(secret.name.as_ref().unwrap());
+            }
+        });
+
+    pod_spec.volumes.iter().for_each(|volume| {
+        if let Some(cfgmap) = volume.config_map.as_ref() {
+            let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
+            locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
+        }
+
+        if let Some(secret) = volume.secret.as_ref() {
+            let mut lock_secrets = locked_secret_orphans.lock().unwrap();
+            lock_secrets.remove(secret.secret_name.as_ref().unwrap());
+        }
+    });
 }
 
 pub fn extend_with<'a, T: ResourceWithPodSpec>(
@@ -279,7 +281,9 @@ mod test {
         let cfgmap_name = cfgmap.name();
         let secret_name = secret.name();
         // Both the ConfigMap and the Secret should not be detected as orphans.
-        let orphans = find_orphans(&client, &config.default_namespace).await;
+        let orphans = find_orphans(&client, &config.default_namespace)
+            .await
+            .expect("Orphans not returned.");
 
         assert!(!orphans.configmaps.contains(cfgmap_name.as_str()));
         assert!(!orphans.secrets.contains(secret_name.as_str()));
@@ -347,7 +351,9 @@ mod test {
         let cfgmap_name = cfgmap.name();
         let secret_name = secret.name();
         // Both the ConfigMap and the Secret should not be detected as orphans.
-        let orphans = find_orphans(&client, &config.default_namespace).await;
+        let orphans = find_orphans(&client, &config.default_namespace)
+            .await
+            .expect("Orphans not returned.");
         assert!(orphans.configmaps.contains(cfgmap_name.as_str()));
         assert!(orphans.secrets.contains(secret_name.as_str()));
 
@@ -455,7 +461,9 @@ mod test {
         let cfgmap_name = cfgmap.name();
         let secret_name = secret.name();
         // Both the ConfigMap and the Secret should not be detected as orphans.
-        let orphans = find_orphans(&client, &config.default_namespace).await;
+        let orphans = find_orphans(&client, &config.default_namespace)
+            .await
+            .expect("Orphans not returned.");
 
         assert!(orphans.configmaps.contains(cfgmap_name.as_str()));
         assert!(orphans.secrets.contains(secret_name.as_str()));
