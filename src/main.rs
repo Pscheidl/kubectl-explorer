@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 
 use crate::input::{parse_user_input, Output, UserArgs};
 use crate::orphans::find_orphans;
+use anyhow::{Context, Result};
 use kube::config::{KubeConfigOptions, Kubeconfig};
 
 mod input;
@@ -11,20 +12,29 @@ mod pod_spec;
 mod resources;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let user_args: UserArgs = parse_user_input();
 
     let config = match user_args.kubeconfig {
-        None => Config::infer()
-            .await
-            .expect("Expected a valid KUBECONFIG environment variable"),
+        None => Config::infer().await.with_context(|| {
+            "No KUBECONFIG path specified and theKUBECONFIG environment variable is not set."
+        })?,
         Some(kubeconfig_path) => Config::from_custom_kubeconfig(
-            Kubeconfig::read_from(kubeconfig_path)
-                .expect("User-provided KUBECONFIG path is invalid."),
+            Kubeconfig::read_from(kubeconfig_path.as_str()).with_context(|| {
+                format!(
+                    "User-provided KUBECONFIG path '{}' is invalid.",
+                    &kubeconfig_path
+                )
+            })?,
             &KubeConfigOptions::default(),
         )
         .await
-        .expect("Invalid KUBECONFIG"),
+        .with_context(|| {
+            format!(
+                "Content of the '{}' kubeconfig is invalid.",
+                &kubeconfig_path
+            )
+        })?,
     };
     let namespace = match user_args.namespace {
         None => config.default_namespace.clone(),
@@ -38,7 +48,7 @@ async fn main() {
 
     let client: Client = Client::try_from(config.clone()).unwrap();
 
-    let orphans = find_orphans(&client, &namespace).await;
+    let orphans = find_orphans(&client, &namespace).await?;
 
     match user_args.output {
         Output::Yaml => {
@@ -48,6 +58,7 @@ async fn main() {
             println!("{}", serde_json::to_string_pretty(&orphans).unwrap());
         }
     }
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]
