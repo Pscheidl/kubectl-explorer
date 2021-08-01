@@ -19,6 +19,8 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
     let secrets_fut = list_resource::<Secret>(client, namespace);
     let (cfgmaps, secrets) = tokio::try_join!(configmaps_fut, secrets_fut)?;
 
+    // Move names of configmaps and secrets into HashSets. Later, remove any configmap's or secret's
+    // name that's being referenced to. The resulting HashSet only contains unreferenced elements.
     let mut cfgmaps_orphans: HashSet<String> = cfgmaps
         .into_iter()
         .filter_map(|r| r.metadata.name)
@@ -75,36 +77,10 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
     extend_with(&mut pod_specs, &replication_controllers);
     extend_with(&mut pod_specs, &pods);
 
-    let locked_secret_orphans = Mutex::new(&mut secrets_orphans);
-    let locked_configmap_orphans = Mutex::new(&mut cfgmaps_orphans);
+    let locked_secret_orphans: Mutex<&mut HashSet<String>> = Mutex::new(&mut secrets_orphans);
+    let locked_configmap_orphans: Mutex<&mut HashSet<String>> = Mutex::new(&mut cfgmaps_orphans);
     pod_specs.par_iter().for_each(|pod_spec| {
-        pod_spec
-            .containers
-            .iter()
-            .flat_map(|container| &container.env_from)
-            .for_each(|env_from| {
-                if let Some(cfgmap) = env_from.config_map_ref.as_ref() {
-                    let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                    locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
-                }
-
-                if let Some(secret) = env_from.secret_ref.as_ref() {
-                    let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                    locked_secrets.remove(secret.name.as_ref().unwrap());
-                }
-            });
-
-        pod_spec.volumes.iter().for_each(|volume| {
-            if let Some(cfgmap) = volume.config_map.as_ref() {
-                let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
-                locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
-            }
-
-            if let Some(secret) = volume.secret.as_ref() {
-                let mut lock_secrets = locked_secret_orphans.lock().unwrap();
-                lock_secrets.remove(secret.secret_name.as_ref().unwrap());
-            }
-        });
+        find_references_in_podspec(pod_spec, &locked_secret_orphans, &locked_configmap_orphans)
     });
 
     ingresses
@@ -116,6 +92,42 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
         });
 
     Ok(Orphans::new(cfgmaps_orphans, secrets_orphans))
+}
+
+/// Inspects given `pod_spec` for references on `ConfigMap`s and `Secret`s.
+/// If any reference is found, it is removed from the list of existing configmaps or secrets respectively.
+fn find_references_in_podspec(
+    pod_spec: &PodSpec,
+    locked_secret_orphans: &Mutex<&mut HashSet<String>>,
+    locked_configmap_orphans: &Mutex<&mut HashSet<String>>,
+) {
+    pod_spec
+        .containers
+        .iter()
+        .flat_map(|container| &container.env_from)
+        .for_each(|env_from| {
+            if let Some(cfgmap) = env_from.config_map_ref.as_ref() {
+                let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
+                locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
+            }
+
+            if let Some(secret) = env_from.secret_ref.as_ref() {
+                let mut locked_secrets = locked_secret_orphans.lock().unwrap();
+                locked_secrets.remove(secret.name.as_ref().unwrap());
+            }
+        });
+
+    pod_spec.volumes.iter().for_each(|volume| {
+        if let Some(cfgmap) = volume.config_map.as_ref() {
+            let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
+            locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
+        }
+
+        if let Some(secret) = volume.secret.as_ref() {
+            let mut lock_secrets = locked_secret_orphans.lock().unwrap();
+            lock_secrets.remove(secret.secret_name.as_ref().unwrap());
+        }
+    });
 }
 
 pub fn extend_with<'a, T: ResourceWithPodSpec>(
