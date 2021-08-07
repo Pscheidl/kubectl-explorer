@@ -16,6 +16,8 @@ use crate::pod_spec::ResourceWithPodSpec;
 use crate::resources::list_resource;
 use k8s_openapi::api::networking::v1::Ingress;
 
+const ROOT_CA_CERT: &str = "kube-root-ca.crt";
+
 pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
     let configmaps_fut = list_resource::<ConfigMap>(client, namespace);
     let secrets_fut = list_resource::<Secret>(client, namespace);
@@ -99,6 +101,7 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
             secrets_orphans.remove(secret);
         });
 
+    cfgmaps_orphans.remove(ROOT_CA_CERT);
     Ok(Orphans::new(cfgmaps_orphans, secrets_orphans))
 }
 
