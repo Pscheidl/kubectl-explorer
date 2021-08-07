@@ -5,14 +5,15 @@
 
 Discovers and prints out any `Configmaps` and `Secrets` not linked to any of the following resources:
 1. Deployments,
-1. ReplicaSets,
-1. StatefulSets,
-1. DaemonSets,
-1. Jobs,
-1. CronJobs,
-1. ReplicationControllers,
-1. Pods,
-1. Ingresses.
+2. ReplicaSets,
+3. StatefulSets,
+4. DaemonSets,
+5. Jobs,
+6. CronJobs,
+7. ReplicationControllers,
+8. Pods,
+9. Ingresses,
+10. ServiceAccounts.
 
 ## Running
 Pre-compiled `x86_64-unknown-linux-gnu` binaries are available. For other platforms, compilation is an easy, but necessary step.

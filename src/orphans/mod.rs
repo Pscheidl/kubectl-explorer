@@ -5,7 +5,9 @@ use anyhow::Result;
 use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, ReplicaSet, StatefulSet};
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::batch::v1beta1::CronJob;
-use k8s_openapi::api::core::v1::{ConfigMap, Pod, PodSpec, ReplicationController, Secret};
+use k8s_openapi::api::core::v1::{
+    ConfigMap, Pod, PodSpec, ReplicationController, Secret, ServiceAccount,
+};
 use kube::Client;
 use rayon::prelude::*;
 use serde::Serialize;
@@ -31,18 +33,6 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
         .filter_map(|r| r.metadata.name)
         .collect();
 
-    // All resources containing `PodSpec` must be inspected, as those may be scaled down, therefore
-    // inspecting only `Pods` wouldn't suffice.
-    let deployments_fut = list_resource::<Deployment>(client, namespace);
-    let replicasets_fut = list_resource::<ReplicaSet>(client, namespace);
-    let statefulsets_fut = list_resource::<StatefulSet>(client, namespace);
-    let daemonsets_fut = list_resource::<DaemonSet>(client, namespace);
-    let jobs_fut = list_resource::<Job>(client, namespace);
-    let cronjobs_fut = list_resource::<CronJob>(client, namespace);
-    let replication_controllers_fut = list_resource::<ReplicationController>(client, namespace);
-    let pods_fut = list_resource::<Pod>(client, namespace);
-    let ingresses_fut = list_resource::<Ingress>(client, namespace);
-
     // Kubernetes API Denial Of Service attack :)
     let (
         deployments,
@@ -54,16 +44,18 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
         replication_controllers,
         pods,
         ingresses,
+        service_accounts,
     ) = tokio::try_join!(
-        deployments_fut,
-        replicasets_fut,
-        statefulsets_fut,
-        daemonsets_fut,
-        jobs_fut,
-        cronjobs_fut,
-        replication_controllers_fut,
-        pods_fut,
-        ingresses_fut
+        list_resource::<Deployment>(client, namespace),
+        list_resource::<ReplicaSet>(client, namespace),
+        list_resource::<StatefulSet>(client, namespace),
+        list_resource::<DaemonSet>(client, namespace),
+        list_resource::<Job>(client, namespace),
+        list_resource::<CronJob>(client, namespace),
+        list_resource::<ReplicationController>(client, namespace),
+        list_resource::<Pod>(client, namespace),
+        list_resource::<Ingress>(client, namespace),
+        list_resource::<ServiceAccount>(client, namespace)
     )?;
 
     let mut pod_specs: Vec<&PodSpec> = Vec::new();
@@ -89,6 +81,22 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
         .filter_map(|tls| tls.secret_name.as_ref())
         .for_each(|secret| {
             secrets_orphans.remove(secret.as_str());
+        });
+
+    service_accounts
+        .iter()
+        .flat_map(|sa| &sa.image_pull_secrets)
+        .filter_map(|secret| secret.name.as_ref())
+        .for_each(|secret| {
+            secrets_orphans.remove(secret);
+        });
+
+    service_accounts
+        .iter()
+        .flat_map(|sa| &sa.secrets)
+        .filter_map(|secret| secret.name.as_ref())
+        .for_each(|secret| {
+            secrets_orphans.remove(secret);
         });
 
     Ok(Orphans::new(cfgmaps_orphans, secrets_orphans))
