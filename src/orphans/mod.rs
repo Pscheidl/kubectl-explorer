@@ -115,17 +115,38 @@ fn find_references_in_podspec(
     pod_spec
         .containers
         .iter()
-        .flat_map(|container| &container.env_from)
-        .for_each(|env_from| {
-            if let Some(cfgmap) = env_from.config_map_ref.as_ref() {
-                let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
-            }
+        .map(|container| (&container.env_from, &container.env))
+        .for_each(|(envs_from_source, env_vars)| {
+            envs_from_source.iter().for_each(|env_from_source| {
+                if let Some(cfgmap) = env_from_source.config_map_ref.as_ref() {
+                    let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
+                    locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
+                }
 
-            if let Some(secret) = env_from.secret_ref.as_ref() {
-                let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                locked_secrets.remove(secret.name.as_ref().unwrap());
-            }
+                if let Some(secret) = env_from_source.secret_ref.as_ref() {
+                    let mut locked_secrets = locked_secret_orphans.lock().unwrap();
+                    locked_secrets.remove(secret.name.as_ref().unwrap());
+                }
+            });
+
+            env_vars
+                .iter()
+                .filter_map(|env_var| env_var.value_from.as_ref())
+                .for_each(|env_var_source| {
+                    if let Some(cfgmap) = &env_var_source.config_map_key_ref {
+                        let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
+                        if let Some(cfgmap_name) = cfgmap.name.as_ref() {
+                            locked_cfg_maps.remove(cfgmap_name);
+                        }
+                    }
+
+                    if let Some(secret) = &env_var_source.secret_key_ref {
+                        let mut locked_secrets = locked_secret_orphans.lock().unwrap();
+                        if let Some(secret_name) = secret.name.as_ref() {
+                            locked_secrets.remove(secret_name);
+                        }
+                    }
+                });
         });
 
     pod_spec.volumes.iter().for_each(|volume| {
