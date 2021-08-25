@@ -35,7 +35,7 @@ pub fn parse_user_input() -> UserArgs {
         .get_matches();
 
     UserArgs::new(
-        matches.value_of("NAMESPACE").map(|arg| arg.to_string()),
+        matches.value_of("KUBECONFIG").map(|arg| arg.to_string()),
         matches.value_of("NAMESPACE").map(|arg| arg.to_string()),
         matches.value_of("OUTPUT").map_or(Output::Yaml, |arg| {
             Output::from_str(arg).unwrap_or(Output::Yaml)
