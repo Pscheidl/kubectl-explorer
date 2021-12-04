@@ -85,8 +85,8 @@ mod tests {
                         containers: vec![Container {
                             name: "nginx".to_string(),
                             image: Some("alpine:latest".to_string()),
-                            command: vec!["sleep".to_string()],
-                            args: vec!["infinity".to_string()],
+                            command: Some(vec!["sleep".to_string()]),
+                            args: Some(vec!["infinity".to_string()]),
                             ..Container::default()
                         }],
                         ..PodSpec::default()

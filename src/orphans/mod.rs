@@ -8,13 +8,13 @@ use k8s_openapi::api::batch::v1beta1::CronJob;
 use k8s_openapi::api::core::v1::{
     ConfigMap, Pod, PodSpec, ReplicationController, Secret, ServiceAccount,
 };
+use k8s_openapi::api::networking::v1::Ingress;
 use kube::Client;
 use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::pod_spec::ResourceWithPodSpec;
 use crate::resources::list_resource;
-use k8s_openapi::api::networking::v1::Ingress;
 
 const ROOT_CA_CERT: &str = "kube-root-ca.crt";
 
@@ -59,7 +59,6 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
         list_resource::<Ingress>(client, namespace),
         list_resource::<ServiceAccount>(client, namespace)
     )?;
-
     let mut pod_specs: Vec<&PodSpec> = Vec::new();
 
     extend_with(&mut pod_specs, &deployments);
@@ -79,23 +78,27 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
 
     ingresses
         .iter()
-        .flat_map(|ingress| &ingress.spec.as_ref().unwrap().tls)
+        .filter_map(|ingress| ingress.spec.as_ref())
+        .filter_map(|a| a.tls.as_ref())
+        .flatten()
         .filter_map(|tls| tls.secret_name.as_ref())
-        .for_each(|secret| {
-            secrets_orphans.remove(secret.as_str());
-        });
-
-    service_accounts
-        .iter()
-        .flat_map(|sa| &sa.image_pull_secrets)
-        .filter_map(|secret| secret.name.as_ref())
         .for_each(|secret| {
             secrets_orphans.remove(secret);
         });
 
     service_accounts
         .iter()
-        .flat_map(|sa| &sa.secrets)
+        .filter_map(|sa| sa.image_pull_secrets.as_ref())
+        .flatten()
+        .filter_map(|secret| secret.name.clone())
+        .for_each(|secret| {
+            secrets_orphans.remove(&secret);
+        });
+
+    service_accounts
+        .iter()
+        .filter_map(|sa| sa.secrets.as_ref())
+        .flatten()
         .filter_map(|secret| secret.name.as_ref())
         .for_each(|secret| {
             secrets_orphans.remove(secret);
@@ -117,49 +120,54 @@ fn find_references_in_podspec(
         .iter()
         .map(|container| (&container.env_from, &container.env))
         .for_each(|(envs_from_source, env_vars)| {
-            envs_from_source.iter().for_each(|env_from_source| {
-                if let Some(cfgmap) = env_from_source.config_map_ref.as_ref() {
-                    let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                    locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
-                }
-
-                if let Some(secret) = env_from_source.secret_ref.as_ref() {
-                    let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                    locked_secrets.remove(secret.name.as_ref().unwrap());
-                }
-            });
-
-            env_vars
-                .iter()
-                .filter_map(|env_var| env_var.value_from.as_ref())
-                .for_each(|env_var_source| {
-                    if let Some(cfgmap) = &env_var_source.config_map_key_ref {
+            if let Some(envs) = &envs_from_source {
+                envs.iter().for_each(|env_from_source| {
+                    if let Some(cfgmap) = env_from_source.config_map_ref.as_ref() {
                         let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                        if let Some(cfgmap_name) = cfgmap.name.as_ref() {
-                            locked_cfg_maps.remove(cfgmap_name);
-                        }
+                        locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
                     }
 
-                    if let Some(secret) = &env_var_source.secret_key_ref {
+                    if let Some(secret) = env_from_source.secret_ref.as_ref() {
                         let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                        if let Some(secret_name) = secret.name.as_ref() {
-                            locked_secrets.remove(secret_name);
-                        }
+                        locked_secrets.remove(secret.name.as_ref().unwrap());
                     }
                 });
+            }
+
+            if let Some(envs) = &env_vars {
+                envs.iter()
+                    .filter_map(|env_var| env_var.value_from.as_ref())
+                    .for_each(|env_var_source| {
+                        if let Some(cfgmap) = &env_var_source.config_map_key_ref {
+                            let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
+                            if let Some(cfgmap_name) = cfgmap.name.as_ref() {
+                                locked_cfg_maps.remove(cfgmap_name);
+                            }
+                        }
+
+                        if let Some(secret) = &env_var_source.secret_key_ref {
+                            let mut locked_secrets = locked_secret_orphans.lock().unwrap();
+                            if let Some(secret_name) = secret.name.as_ref() {
+                                locked_secrets.remove(secret_name);
+                            }
+                        }
+                    });
+            }
         });
 
-    pod_spec.volumes.iter().for_each(|volume| {
-        if let Some(cfgmap) = volume.config_map.as_ref() {
-            let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
-            locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
-        }
+    if let Some(volumes) = &pod_spec.volumes {
+        volumes.iter().for_each(|volume| {
+            if let Some(cfgmap) = volume.config_map.as_ref() {
+                let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
+                locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
+            }
 
-        if let Some(secret) = volume.secret.as_ref() {
-            let mut lock_secrets = locked_secret_orphans.lock().unwrap();
-            lock_secrets.remove(secret.secret_name.as_ref().unwrap());
-        }
-    });
+            if let Some(secret) = volume.secret.as_ref() {
+                let mut lock_secrets = locked_secret_orphans.lock().unwrap();
+                lock_secrets.remove(secret.secret_name.as_ref().unwrap());
+            }
+        });
+    }
 }
 
 pub fn extend_with<'a, T: ResourceWithPodSpec>(
@@ -189,7 +197,10 @@ impl Orphans {
 
 #[cfg(test)]
 mod test {
-    use crate::orphans::find_orphans;
+    use std::array::IntoIter;
+    use std::collections::BTreeMap;
+    use std::iter::FromIterator;
+
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
     use k8s_openapi::api::core::v1::{
         ConfigMap, ConfigMapEnvSource, Container, EnvFromSource, PodSpec, PodTemplateSpec, Secret,
@@ -200,9 +211,8 @@ mod test {
     use k8s_openapi::ByteString;
     use kube::api::{DeleteParams, ObjectMeta, PostParams};
     use kube::{Api, Client, Config, ResourceExt};
-    use std::array::IntoIter;
-    use std::collections::BTreeMap;
-    use std::iter::FromIterator;
+
+    use crate::orphans::find_orphans;
 
     #[tokio::test]
     async fn cfgmap_secret_referenced_by_deployment() {
@@ -219,7 +229,7 @@ mod test {
                 name: Some("configmap".to_string()),
                 ..ObjectMeta::default()
             },
-            data: config_data.clone(),
+            data: Some(config_data.clone()),
             ..ConfigMap::default()
         };
 
@@ -240,7 +250,7 @@ mod test {
                 name: Some("secret".to_string()),
                 ..ObjectMeta::default()
             },
-            data: secret_data.clone(),
+            data: Some(secret_data.clone()),
             ..Secret::default()
         };
         let secret_api = Api::<Secret>::namespaced(client.clone(), &config.default_namespace);
@@ -258,19 +268,19 @@ mod test {
             spec: Some(DeploymentSpec {
                 template: PodTemplateSpec {
                     metadata: Some(ObjectMeta {
-                        labels: BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                        labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
                             "app".to_string(),
                             "deployment".to_string(),
-                        )])),
+                        )]))),
                         ..ObjectMeta::default()
                     }),
                     spec: Some(PodSpec {
                         containers: vec![Container {
                             name: "nginx".to_string(),
                             image: Some("alpine:latest".to_string()),
-                            command: vec!["sleep".to_string()],
-                            args: vec!["infinity".to_string()],
-                            env_from: vec![
+                            command: Some(vec!["sleep".to_string()]),
+                            args: Some(vec!["infinity".to_string()]),
+                            env_from: Some(vec![
                                 EnvFromSource {
                                     config_map_ref: Some(ConfigMapEnvSource {
                                         name: Some(cfgmap.name()),
@@ -285,7 +295,7 @@ mod test {
                                     }),
                                     ..EnvFromSource::default()
                                 },
-                            ],
+                            ]),
                             ..Container::default()
                         }],
                         ..PodSpec::default()
@@ -293,10 +303,10 @@ mod test {
                     ..PodTemplateSpec::default()
                 },
                 selector: LabelSelector {
-                    match_labels: BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                    match_labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
                         "app".to_string(),
                         "deployment".to_string(),
-                    )])),
+                    )]))),
                     ..LabelSelector::default()
                 },
                 ..DeploymentSpec::default()
@@ -350,7 +360,7 @@ mod test {
                 name: Some("orphan-cfgmap".to_string()),
                 ..ObjectMeta::default()
             },
-            data: config_data.clone(),
+            data: Some(config_data.clone()),
             ..ConfigMap::default()
         };
 
@@ -371,7 +381,7 @@ mod test {
                 name: Some("orphan-secret".to_string()),
                 ..ObjectMeta::default()
             },
-            data: secret_data.clone(),
+            data: Some(secret_data.clone()),
             ..Secret::default()
         };
         let secret_api = Api::<Secret>::namespaced(client.clone(), &config.default_namespace);
@@ -415,7 +425,7 @@ mod test {
                 name: Some("configmap-not-linked-no-envfrom".to_string()),
                 ..ObjectMeta::default()
             },
-            data: config_data.clone(),
+            data: Some(config_data.clone()),
             ..ConfigMap::default()
         };
 
@@ -436,7 +446,7 @@ mod test {
                 name: Some("secret-not-linked-no-envfrom".to_string()),
                 ..ObjectMeta::default()
             },
-            data: secret_data.clone(),
+            data: Some(secret_data.clone()),
             ..Secret::default()
         };
         let secret_api = Api::<Secret>::namespaced(client.clone(), &config.default_namespace);
@@ -454,18 +464,18 @@ mod test {
             spec: Some(DeploymentSpec {
                 template: PodTemplateSpec {
                     metadata: Some(ObjectMeta {
-                        labels: BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                        labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
                             "app".to_string(),
                             "deployment".to_string(),
-                        )])),
+                        )]))),
                         ..ObjectMeta::default()
                     }),
                     spec: Some(PodSpec {
                         containers: vec![Container {
                             name: "nginx".to_string(),
                             image: Some("alpine:latest".to_string()),
-                            command: vec!["sleep".to_string()],
-                            args: vec!["infinity".to_string()],
+                            command: Some(vec!["sleep".to_string()]),
+                            args: Some(vec!["infinity".to_string()]),
                             ..Container::default()
                         }],
                         ..PodSpec::default()
@@ -473,10 +483,10 @@ mod test {
                     ..PodTemplateSpec::default()
                 },
                 selector: LabelSelector {
-                    match_labels: BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                    match_labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
                         "app".to_string(),
                         "deployment".to_string(),
-                    )])),
+                    )]))),
                     ..LabelSelector::default()
                 },
                 ..DeploymentSpec::default()
