@@ -8,7 +8,7 @@ pub fn parse_user_input() -> UserArgs {
         .about("Discovers unused ConfigMaps and Secrets")
         .arg(
             Arg::with_name("KUBECONFIG")
-                .short("k")
+                .short('k')
                 .long("kubeconfig")
                 .value_name("PATH_TO_KUBECONFIG")
                 .help("Path to a KUBECONFIG file. When not set, env is used.")
@@ -16,7 +16,7 @@ pub fn parse_user_input() -> UserArgs {
         )
         .arg(
             Arg::with_name("NAMESPACE")
-                .short("n")
+                .short('n')
                 .long("namespace")
                 .value_name("NAMESPACE")
                 .help("Namespace to search in.")
@@ -24,7 +24,7 @@ pub fn parse_user_input() -> UserArgs {
         )
         .arg(
             Arg::with_name("OUTPUT")
-                .short("o")
+                .short('o')
                 .long("output")
                 .value_name("OUTPUT")
                 .help("Output format. YAML by default.")
