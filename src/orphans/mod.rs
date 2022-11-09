@@ -283,14 +283,14 @@ mod test {
                             env_from: Some(vec![
                                 EnvFromSource {
                                     config_map_ref: Some(ConfigMapEnvSource {
-                                        name: Some(cfgmap.name()),
+                                        name: Some(cfgmap.name_any()),
                                         ..ConfigMapEnvSource::default()
                                     }),
                                     ..EnvFromSource::default()
                                 },
                                 EnvFromSource {
                                     secret_ref: Some(SecretEnvSource {
-                                        name: Some(secret.name()),
+                                        name: Some(secret.name_any()),
                                         ..SecretEnvSource::default()
                                     }),
                                     ..EnvFromSource::default()
@@ -320,8 +320,8 @@ mod test {
             .await
             .expect("Deployment resources not created in Kubernetes cluster.");
 
-        let cfgmap_name = cfgmap.name();
-        let secret_name = secret.name();
+        let cfgmap_name = cfgmap.name_any();
+        let secret_name = secret.name_any();
         // Both the ConfigMap and the Secret should not be detected as orphans.
         let orphans = find_orphans(&client, &config.default_namespace)
             .await
@@ -332,7 +332,7 @@ mod test {
 
         // Free resources after the test
         dep_api
-            .delete(&deployment_w_pod_spec.name(), &DeleteParams::default())
+            .delete(&deployment_w_pod_spec.name_any(), &DeleteParams::default())
             .await
             .expect("Deployment not deleted.");
         secret_api
@@ -390,8 +390,8 @@ mod test {
             .await
             .expect("Secret not created.");
 
-        let cfgmap_name = cfgmap.name();
-        let secret_name = secret.name();
+        let cfgmap_name = cfgmap.name_any();
+        let secret_name = secret.name_any();
         // Both the ConfigMap and the Secret should not be detected as orphans.
         let orphans = find_orphans(&client, &config.default_namespace)
             .await
@@ -500,8 +500,8 @@ mod test {
             .await
             .expect("Deployment resources not created in Kubernetes cluster.");
 
-        let cfgmap_name = cfgmap.name();
-        let secret_name = secret.name();
+        let cfgmap_name = cfgmap.name_any();
+        let secret_name = secret.name_any();
         // Both the ConfigMap and the Secret should not be detected as orphans.
         let orphans = find_orphans(&client, &config.default_namespace)
             .await
@@ -512,7 +512,7 @@ mod test {
 
         // Free resources after the test
         dep_api
-            .delete(&deployment_w_pod_spec.name(), &DeleteParams::default())
+            .delete(&deployment_w_pod_spec.name_any(), &DeleteParams::default())
             .await
             .expect("Deployment not deleted.");
         secret_api

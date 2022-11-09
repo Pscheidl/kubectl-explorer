@@ -28,7 +28,7 @@ pub fn parse_user_input() -> UserArgs {
                 .long("output")
                 .value_name("OUTPUT")
                 .help("Output format. YAML by default.")
-                .possible_values(&["yaml", "json"])
+                .possible_values(["yaml", "json"])
                 .default_value("yaml")
                 .takes_value(true),
         )
