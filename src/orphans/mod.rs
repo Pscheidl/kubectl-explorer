@@ -197,7 +197,6 @@ impl Orphans {
 
 #[cfg(test)]
 mod test {
-    use std::array::IntoIter;
     use std::collections::BTreeMap;
     use std::iter::FromIterator;
 
@@ -268,10 +267,10 @@ mod test {
             spec: Some(DeploymentSpec {
                 template: PodTemplateSpec {
                     metadata: Some(ObjectMeta {
-                        labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                        labels: Some(BTreeMap::<String, String>::from_iter([(
                             "app".to_string(),
                             "deployment".to_string(),
-                        )]))),
+                        )])),
                         ..ObjectMeta::default()
                     }),
                     spec: Some(PodSpec {
@@ -303,10 +302,10 @@ mod test {
                     ..PodTemplateSpec::default()
                 },
                 selector: LabelSelector {
-                    match_labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                    match_labels: Some(BTreeMap::<String, String>::from_iter([(
                         "app".to_string(),
                         "deployment".to_string(),
-                    )]))),
+                    )])),
                     ..LabelSelector::default()
                 },
                 ..DeploymentSpec::default()
@@ -464,10 +463,10 @@ mod test {
             spec: Some(DeploymentSpec {
                 template: PodTemplateSpec {
                     metadata: Some(ObjectMeta {
-                        labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                        labels: Some(BTreeMap::<String, String>::from_iter([(
                             "app".to_string(),
                             "deployment".to_string(),
-                        )]))),
+                        )])),
                         ..ObjectMeta::default()
                     }),
                     spec: Some(PodSpec {
@@ -483,10 +482,10 @@ mod test {
                     ..PodTemplateSpec::default()
                 },
                 selector: LabelSelector {
-                    match_labels: Some(BTreeMap::<String, String>::from_iter(IntoIter::new([(
+                    match_labels: Some(BTreeMap::<String, String>::from_iter([(
                         "app".to_string(),
                         "deployment".to_string(),
-                    )]))),
+                    )])),
                     ..LabelSelector::default()
                 },
                 ..DeploymentSpec::default()
