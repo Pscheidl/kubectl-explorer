@@ -5,7 +5,7 @@ use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::batch::v1beta1::CronJob;
 use k8s_openapi::api::core::v1::{Pod, PodSpec, ReplicationController};
 
-pub trait ResourceWithPodSpec: Sized {
+pub trait ResourceWithPodSpec {
     fn pod_template_spec(&self) -> Option<&PodSpec>;
 }
 
