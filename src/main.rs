@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
 
     let config = match user_args.kubeconfig {
         None => Config::infer().await.with_context(|| {
-            "No KUBECONFIG path specified and theKUBECONFIG environment variable is not set."
+            "No KUBECONFIG path specified and the KUBECONFIG environment variable is not set."
         })?,
         Some(kubeconfig_path) => Config::from_custom_kubeconfig(
             Kubeconfig::read_from(kubeconfig_path.as_str()).with_context(|| {
