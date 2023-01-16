@@ -1,8 +1,8 @@
 use std::option::Option;
 
 use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, ReplicaSet, StatefulSet};
+use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::batch::v1::Job;
-use k8s_openapi::api::batch::v1beta1::CronJob;
 use k8s_openapi::api::core::v1::{Pod, PodSpec, ReplicationController};
 
 pub trait ResourceWithPodSpec {
