@@ -50,7 +50,7 @@ If `namespace` is not defined, the default namespace from `KUBECONFIG` is used.
 
 Run tests using `cargo test`. Tests require:
 
-1. Running Kubernetes cluster with supported API version `1_19`,
+1. Running Kubernetes cluster with supported API version `1_26`,
 1. `KUBECONFIG` environment variable set.
 
 An easy way to obtain a Kubernetes cluster is [k3s.io](https://k3s.io/) - curl -sfL https://get.k3s.io | sh -. After
