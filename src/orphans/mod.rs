@@ -200,6 +200,8 @@ mod test {
     use std::collections::BTreeMap;
     use std::iter::FromIterator;
 
+    use base64::engine::general_purpose;
+    use base64::Engine;
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
     use k8s_openapi::api::core::v1::{
         ConfigMap, ConfigMapEnvSource, Container, EnvFromSource, PodSpec, PodTemplateSpec, Secret,
@@ -242,7 +244,7 @@ mod test {
         let mut secret_data: BTreeMap<String, ByteString> = BTreeMap::new(); // Used both for cfgmap and secret
         secret_data.insert(
             "test_key".to_owned(),
-            ByteString(base64::encode("test_value").into_bytes()),
+            ByteString(general_purpose::STANDARD.encode("test_value").into_bytes()),
         );
         let secret = Secret {
             metadata: ObjectMeta {
@@ -373,7 +375,7 @@ mod test {
         let mut secret_data: BTreeMap<String, ByteString> = BTreeMap::new(); // Used both for cfgmap and secret
         secret_data.insert(
             "test_key".to_owned(),
-            ByteString(base64::encode("test_value").into_bytes()),
+            ByteString(general_purpose::STANDARD.encode("test_value").into_bytes()),
         );
         let secret = Secret {
             metadata: ObjectMeta {
@@ -433,12 +435,11 @@ mod test {
             .create(&PostParams::default(), &cfgmap)
             .await
             .expect("Configmap not created.");
-
         // Create secretg in the Kubernetes cluster
         let mut secret_data: BTreeMap<String, ByteString> = BTreeMap::new(); // Used both for cfgmap and secret
         secret_data.insert(
             "test_key".to_owned(),
-            ByteString(base64::encode("test_value").into_bytes()),
+            ByteString(general_purpose::STANDARD.encode("test_value").into_bytes()),
         );
         let secret = Secret {
             metadata: ObjectMeta {
