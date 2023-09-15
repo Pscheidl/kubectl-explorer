@@ -37,9 +37,9 @@ async fn main() -> Result<()> {
             )
         })?,
     };
-    let namespace = match user_args.namespace {
-        None => config.default_namespace.clone(),
-        Some(ns) => ns,
+    let namespace = match user_args.namespace.as_ref() {
+        None => config.default_namespace.as_str(),
+        Some(ns) => ns.as_str(),
     };
 
     println!(
