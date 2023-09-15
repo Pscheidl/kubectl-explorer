@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
 
 use anyhow::{Context, Result};
-use kube::config::{KubeConfigOptions, Kubeconfig};
 use kube::{Client, Config};
+use kube::config::{Kubeconfig, KubeConfigOptions};
 
-use crate::input::{parse_user_input, Output, UserArgs};
+use crate::input::{Output, parse_user_input, UserArgs};
 use crate::orphans::find_orphans;
 
 mod input;
