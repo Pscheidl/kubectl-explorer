@@ -3,34 +3,37 @@ use std::str::FromStr;
 
 pub fn parse_user_input() -> UserArgs {
     let matches = Command::new("KubEx - Kubernetes Explorer")
-        .version("0.1.0")
+        .version("0.2.0")
         .author("Pavel Pscheidl <pavelpscheidl@gmail.com>")
         .about("Discovers unused ConfigMaps and Secrets")
-        .arg(
-            Arg::new("KUBECONFIG")
-                .short('k')
-                .long("kubeconfig")
-                .value_name("PATH_TO_KUBECONFIG")
-                .help("Path to a KUBECONFIG file. When not set, env is used.")
-                .action(ArgAction::Set),
-        )
-        .arg(
-            Arg::new("NAMESPACE")
-                .short('n')
-                .long("namespace")
-                .value_name("NAMESPACE")
-                .help("Namespace to search in.")
-                .action(ArgAction::Set),
-        )
-        .arg(
-            Arg::new("OUTPUT")
-                .short('o')
-                .long("output")
-                .value_name("OUTPUT")
-                .help("Output format. YAML by default.")
-                .value_parser(PossibleValuesParser::new(["yaml", "json"]))
-                .default_value("yaml")
-                .action(ArgAction::Set),
+        .subcommand(
+            Command::new("orphans")
+                .arg(
+                    Arg::new("KUBECONFIG")
+                        .short('k')
+                        .long("kubeconfig")
+                        .value_name("PATH_TO_KUBECONFIG")
+                        .help("Path to a KUBECONFIG file. When not set, env is used.")
+                        .action(ArgAction::Set),
+                )
+                .arg(
+                    Arg::new("NAMESPACE")
+                        .short('n')
+                        .long("namespace")
+                        .value_name("NAMESPACE")
+                        .help("Namespace to search in.")
+                        .action(ArgAction::Set),
+                )
+                .arg(
+                    Arg::new("OUTPUT")
+                        .short('o')
+                        .long("output")
+                        .value_name("OUTPUT")
+                        .help("Output format. YAML by default.")
+                        .value_parser(PossibleValuesParser::new(["yaml", "json"]))
+                        .default_value("yaml")
+                        .action(ArgAction::Set),
+                ),
         )
         .get_matches();
 
