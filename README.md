@@ -1,7 +1,7 @@
-# Kubectl explorer plugin
+# Kubectl explorer plugin - orphan detection
 [![Rust build & tests](https://github.com/Pscheidl/kubexplorer/actions/workflows/rust.yml/badge.svg)](https://github.com/Pscheidl/kubexplorer/actions/workflows/rust.yml)
 
-A kubectl plugin to explore orphan `configmaps` and `secrets`. Can be used standalone. 
+A kubectl plugin to explore **orphan** `configmaps` and `secrets`. Can be used standalone. 
 
 New issues or any kind of feedback are most welcome. 
 
