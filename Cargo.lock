@@ -699,8 +699,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "kubex"
-version = "0.1.0"
+name = "kubectl-explore"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64",
