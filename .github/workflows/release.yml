@@ -1,0 +1,83 @@
+name: Latest build
+
+on:
+  push:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET_LINUX: x86_64-unknown-linux-gnu
+  TARGET_MACOS: aarch64-apple-darwin
+  TARGET_WINDOWS: x86_64-pc-windows-gnu
+  ARTIFACT_NAME: kubectl-explore
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install cross-platform compile dependencies
+        run: sudo apt install mingw-w64 pkg-config libssl-dev -y
+      - uses: debianmaster/actions-k3s@master
+        id: k3s
+        with:
+          version: 'latest'
+      - uses: actions/checkout@v2
+      - name: Cargo test
+        run: cargo test --verbose
+      - name: Release build
+        run: rustup target add ${{ env.TARGET_LINUX }} && rustup target add ${{ env.TARGET_WINDOWS }} && cargo build -p ${{ env.ARTIFACT_NAME }} --release --target ${{ env.TARGET_LINUX }} && cargo build -p ${{ env.ARTIFACT_NAME }} --release --target ${{ env.TARGET_WINDOWS }}
+      - name: Create ${{ env.TARGET_LINUX }} and ${{ env.TARGET_LINUX }} ZIP packages
+        run: zip -j ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_LINUX }}.zip target/${{ env.TARGET_LINUX }}/release/${{ env.ARTIFACT_NAME }} LICENSE && zip -j ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_WINDOWS }}.zip target/${{ env.TARGET_WINDOWS }}/release/${{ env.ARTIFACT_NAME }}.exe LICENSE
+      - name: Upload ${{ env.TARGET_LINUX }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.TARGET_LINUX }}
+          path: ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_LINUX }}.zip
+      - name: Upload ${{ env.TARGET_WINDOWS }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.TARGET_WINDOWS }}
+          path: ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_WINDOWS }}.zip
+
+  build-macos:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create ${{ env.TARGET_MACOS }} ZIP package
+        run: rustup target add ${{ env.TARGET_MACOS }} && cargo build -p ${{ env.ARTIFACT_NAME }} --release --target ${{ env.TARGET_MACOS }} && zip -j ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_MACOS }}.zip target/${{ env.TARGET_MACOS }}/release/${{ env.ARTIFACT_NAME }} LICENSE
+      - name: Upload ${{ env.TARGET_MACOS }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.TARGET_MACOS }}
+          path: ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_MACOS }}.zip
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-22.04
+    needs: [build-linux, build-macos]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Download ${{ env.TARGET_LINUX }} binary
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ env.TARGET_LINUX }}
+      - name: Download ${{ env.TARGET_WINDOWS }} binary
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ env.TARGET_WINDOWS }}
+      - name: Download ${{ env.TARGET_MACOS }} binary
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ env.TARGET_MACOS }}
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Latest Development Build"
+          files: |
+            LICENSE
+            ./${{ env.ARTIFACT_NAME }}_${{ env.TARGET_LINUX }}.zip
+            ./${{ env.ARTIFACT_NAME }}_${{ env.TARGET_MACOS }}.zip
+            ./${{ env.ARTIFACT_NAME }}_${{ env.TARGET_WINDOWS }}.zip
