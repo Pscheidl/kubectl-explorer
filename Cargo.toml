@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-kube = { version = "0.87.1", default-features = true, features = ["derive"] }
-kube-derive = "0.87.1"
-k8s-openapi = { version = "0.20.0", default-features = false, features = [
+kube = { version = "0.88", default-features = true, features = ["derive"] }
+kube-derive = "0.88"
+k8s-openapi = { version = "0.21", default-features = false, features = [
     "v1_26",
 ] }
 futures = "0.3"
