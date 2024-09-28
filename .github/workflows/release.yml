@@ -29,12 +29,12 @@ jobs:
       - name: Create ${{ env.TARGET_LINUX }} and ${{ env.TARGET_LINUX }} ZIP packages
         run: zip -j ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_LINUX }}.zip target/${{ env.TARGET_LINUX }}/release/${{ env.ARTIFACT_NAME }} LICENSE && zip -j ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_WINDOWS }}.zip target/${{ env.TARGET_WINDOWS }}/release/${{ env.ARTIFACT_NAME }}.exe LICENSE
       - name: Upload ${{ env.TARGET_LINUX }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.TARGET_LINUX }}
           path: ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_LINUX }}.zip
       - name: Upload ${{ env.TARGET_WINDOWS }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.TARGET_WINDOWS }}
           path: ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_WINDOWS }}.zip
@@ -42,11 +42,11 @@ jobs:
   build-macos:
     runs-on: macos-13
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Create ${{ env.TARGET_MACOS }} ZIP package
         run: rustup target add ${{ env.TARGET_MACOS }} && cargo build -p ${{ env.ARTIFACT_NAME }} --release --target ${{ env.TARGET_MACOS }} && zip -j ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_MACOS }}.zip target/${{ env.TARGET_MACOS }}/release/${{ env.ARTIFACT_NAME }} LICENSE
       - name: Upload ${{ env.TARGET_MACOS }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.TARGET_MACOS }}
           path: ${{ env.ARTIFACT_NAME }}_${{ env.TARGET_MACOS }}.zip
@@ -59,15 +59,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Download ${{ env.TARGET_LINUX }} binary
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.TARGET_LINUX }}
       - name: Download ${{ env.TARGET_WINDOWS }} binary
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.TARGET_WINDOWS }}
       - name: Download ${{ env.TARGET_MACOS }} binary
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.TARGET_MACOS }}
       - uses: "marvinpinto/action-automatic-releases@latest"
