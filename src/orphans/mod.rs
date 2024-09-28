@@ -90,7 +90,7 @@ pub async fn find_orphans(client: &Client, namespace: &str) -> Result<Orphans> {
         .iter()
         .filter_map(|sa| sa.image_pull_secrets.as_ref())
         .flatten()
-        .filter_map(|secret| secret.name.clone())
+        .map(|secret| secret.name.clone())
         .for_each(|secret| {
             secrets_orphans.remove(&secret);
         });
@@ -124,12 +124,12 @@ fn find_references_in_podspec(
                 envs.iter().for_each(|env_from_source| {
                     if let Some(cfgmap) = env_from_source.config_map_ref.as_ref() {
                         let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                        locked_cfg_maps.remove(cfgmap.name.as_ref().unwrap());
+                        locked_cfg_maps.remove(&cfgmap.name);
                     }
 
                     if let Some(secret) = env_from_source.secret_ref.as_ref() {
                         let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                        locked_secrets.remove(secret.name.as_ref().unwrap());
+                        locked_secrets.remove(&secret.name);
                     }
                 });
             }
@@ -140,16 +140,12 @@ fn find_references_in_podspec(
                     .for_each(|env_var_source| {
                         if let Some(cfgmap) = &env_var_source.config_map_key_ref {
                             let mut locked_cfg_maps = locked_configmap_orphans.lock().unwrap();
-                            if let Some(cfgmap_name) = cfgmap.name.as_ref() {
-                                locked_cfg_maps.remove(cfgmap_name);
-                            }
+                            locked_cfg_maps.remove(&cfgmap.name);
                         }
 
                         if let Some(secret) = &env_var_source.secret_key_ref {
                             let mut locked_secrets = locked_secret_orphans.lock().unwrap();
-                            if let Some(secret_name) = secret.name.as_ref() {
-                                locked_secrets.remove(secret_name);
-                            }
+                            locked_secrets.remove(&secret.name);
                         }
                     });
             }
@@ -159,7 +155,7 @@ fn find_references_in_podspec(
         volumes.iter().for_each(|volume| {
             if let Some(cfgmap) = volume.config_map.as_ref() {
                 let mut locked_cfgmaps = locked_configmap_orphans.lock().unwrap();
-                locked_cfgmaps.remove(cfgmap.name.as_ref().unwrap());
+                locked_cfgmaps.remove(&cfgmap.name);
             }
 
             if let Some(secret) = volume.secret.as_ref() {
@@ -170,7 +166,7 @@ fn find_references_in_podspec(
     }
 }
 
-pub fn extend_with<'a, T: ResourceWithPodSpec>(
+pub fn extend_with<'a, T>(
     pod_specs: &mut Vec<&'a PodSpec>,
     extensions: &'a [T],
 ) where
@@ -284,14 +280,14 @@ mod test {
                             env_from: Some(vec![
                                 EnvFromSource {
                                     config_map_ref: Some(ConfigMapEnvSource {
-                                        name: Some(cfgmap.name_any()),
+                                        name: cfgmap.name_any(),
                                         ..ConfigMapEnvSource::default()
                                     }),
                                     ..EnvFromSource::default()
                                 },
                                 EnvFromSource {
                                     secret_ref: Some(SecretEnvSource {
-                                        name: Some(secret.name_any()),
+                                        name: secret.name_any(),
                                         ..SecretEnvSource::default()
                                     }),
                                     ..EnvFromSource::default()
