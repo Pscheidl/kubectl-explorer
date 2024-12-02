@@ -166,10 +166,8 @@ fn find_references_in_podspec(
     }
 }
 
-pub fn extend_with<'a, T>(
-    pod_specs: &mut Vec<&'a PodSpec>,
-    extensions: &'a [T],
-) where
+pub fn extend_with<'a, T>(pod_specs: &mut Vec<&'a PodSpec>, extensions: &'a [T])
+where
     T: ResourceWithPodSpec,
 {
     let ext_pod_specs = extensions.iter().filter_map(|e| e.pod_template_spec());
